@@ -228,3 +228,4 @@ Copy `.env.example` to `.env` and set the variables you need:
 ## 📄 License
 
 MIT © [sarthak-here](https://github.com/sarthak-here)
+
