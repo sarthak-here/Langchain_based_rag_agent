@@ -14,7 +14,6 @@ from langchain.tools.retriever import create_retriever_tool
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferWindowMemory
-from langchain_core.messages import SystemMessage
 
 import config
 
@@ -82,9 +81,32 @@ def build_agent() -> AgentExecutor:
         verbose=True,
         handle_parsing_errors=True,
         max_iterations=5,
+        return_intermediate_steps=True,
     )
 
     return agent_executor
+
+
+def _extract_sources(intermediate_steps: list) -> list[dict]:
+    """Extract unique source documents from agent intermediate steps."""
+    seen = set()
+    sources = []
+    for _, observation in intermediate_steps:
+        if not isinstance(observation, list):
+            continue
+        for doc in observation:
+            meta = doc.metadata if hasattr(doc, "metadata") else {}
+            key = meta.get("source", "") + str(meta.get("page", ""))
+            if key and key not in seen:
+                seen.add(key)
+                sources.append(
+                    {
+                        "source": meta.get("source", "Unknown"),
+                        "page": meta.get("page"),
+                        "snippet": doc.page_content[:200].strip(),
+                    }
+                )
+    return sources
 
 
 class RAGAgent:
@@ -96,6 +118,12 @@ class RAGAgent:
     def chat(self, query: str) -> str:
         result = self.executor.invoke({"input": query})
         return result["output"]
+
+    def chat_with_sources(self, query: str) -> tuple[str, list[dict]]:
+        """Return (answer, sources) where sources is a list of dicts with source/page/snippet."""
+        result = self.executor.invoke({"input": query})
+        sources = _extract_sources(result.get("intermediate_steps", []))
+        return result["output"], sources
 
     def reset_memory(self):
         self.executor.memory.clear()

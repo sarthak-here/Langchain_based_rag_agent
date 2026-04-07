@@ -5,6 +5,7 @@ embeds them, and stores in ChromaDB vector store.
 
 import os
 import argparse
+import shutil
 from pathlib import Path
 
 from langchain_community.document_loaders import (
@@ -12,6 +13,7 @@ from langchain_community.document_loaders import (
     TextLoader,
     DirectoryLoader,
     WebBaseLoader,
+    UnstructuredMarkdownLoader,
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
@@ -30,15 +32,17 @@ def load_documents(source: str) -> list:
     path = Path(source)
 
     if path.is_dir():
-        print(f"Loading all .txt and .pdf files from directory: {source}")
+        print(f"Loading all .txt, .pdf, and .md files from directory: {source}")
         loaders = [
             DirectoryLoader(source, glob="**/*.pdf", loader_cls=PyPDFLoader),
             DirectoryLoader(source, glob="**/*.txt", loader_cls=TextLoader),
+            DirectoryLoader(source, glob="**/*.md", loader_cls=UnstructuredMarkdownLoader),
         ]
         docs = []
         for loader in loaders:
             try:
-                docs.extend(loader.load())
+                loaded = loader.load()
+                docs.extend(loaded)
             except Exception as e:
                 print(f"Warning: {e}")
         return docs
@@ -46,6 +50,10 @@ def load_documents(source: str) -> list:
     if path.suffix == ".pdf":
         print(f"Loading PDF: {source}")
         return PyPDFLoader(source).load()
+
+    if path.suffix == ".md":
+        print(f"Loading Markdown: {source}")
+        return UnstructuredMarkdownLoader(source).load()
 
     print(f"Loading text file: {source}")
     return TextLoader(source).load()
@@ -62,6 +70,13 @@ def split_documents(docs: list) -> list:
     return chunks
 
 
+def reset_vector_store():
+    """Delete the existing ChromaDB persist directory."""
+    if os.path.exists(config.CHROMA_PERSIST_DIR):
+        shutil.rmtree(config.CHROMA_PERSIST_DIR)
+        print(f"Cleared existing vector store at: {config.CHROMA_PERSIST_DIR}")
+
+
 def build_vector_store(chunks: list) -> Chroma:
     embeddings = OpenAIEmbeddings(openai_api_key=config.OPENAI_API_KEY)
     vector_store = Chroma.from_documents(
@@ -74,7 +89,9 @@ def build_vector_store(chunks: list) -> Chroma:
     return vector_store
 
 
-def ingest(source: str):
+def ingest(source: str, reset: bool = False):
+    if reset:
+        reset_vector_store()
     docs = load_documents(source)
     if not docs:
         print("No documents found. Exiting.")
@@ -90,5 +107,10 @@ if __name__ == "__main__":
         "source",
         help="Path to a file, directory, or a URL to ingest.",
     )
+    parser.add_argument(
+        "--reset", "-r",
+        action="store_true",
+        help="Clear the existing vector store before ingesting.",
+    )
     args = parser.parse_args()
-    ingest(args.source)
+    ingest(args.source, reset=args.reset)
