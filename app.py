@@ -9,6 +9,7 @@ import os
 import streamlit as st
 from rag_agent import RAGAgent
 from ingest import ingest
+import config
 
 st.set_page_config(
     page_title="LangChain RAG Agent",
@@ -21,25 +22,51 @@ st.caption("Ask questions about your ingested documents.")
 
 
 @st.cache_resource(show_spinner="Loading RAG agent...")
-def get_agent():
-    return RAGAgent()
+def get_agent(provider: str, model: str, ollama_base_url: str):
+    return RAGAgent(provider=provider, model=model, ollama_base_url=ollama_base_url)
 
-
-agent = get_agent()
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("Controls")
 
+    # ── Model provider ────────────────────────────────────────────────────────
+    st.subheader("Model Provider")
+    provider = st.radio(
+        "Choose LLM",
+        options=["OpenAI GPT", "Llama (Ollama)"],
+        index=0,
+        horizontal=True,
+    )
+
+    if provider == "OpenAI GPT":
+        model_name = st.text_input("Model name", value=config.OPENAI_MODEL)
+        ollama_url = config.OLLAMA_BASE_URL
+        selected_provider = "openai"
+        st.caption("Requires OPENAI_API_KEY in your .env file.")
+    else:
+        model_name = st.text_input("Model name", value=config.OLLAMA_MODEL)
+        ollama_url = st.text_input("Ollama server URL", value=config.OLLAMA_BASE_URL)
+        selected_provider = "ollama"
+        st.caption(
+            f"Ollama must be running locally. "
+            f"Embeddings use `{config.OLLAMA_EMBED_MODEL}` — make sure it is pulled."
+        )
+
+    st.markdown("---")
+
+    # ── Conversation controls ─────────────────────────────────────────────────
+    st.subheader("Controls")
     if st.button("Clear conversation"):
         st.session_state.messages = []
-        agent.reset_memory()
+        # reset memory on current agent if already loaded
+        key = (selected_provider, model_name, ollama_url)
+        if st.session_state.get("agent_key") == key:
+            get_agent(*key).reset_memory()
         st.rerun()
 
     st.markdown("---")
+
+    # ── Document ingestion ────────────────────────────────────────────────────
     st.subheader("Ingest Documents")
 
     uploaded_files = st.file_uploader(
@@ -63,7 +90,19 @@ with st.sidebar:
     st.markdown("**CLI ingestion:**")
     st.code("python ingest.py <path_or_url> [--reset]", language="bash")
 
-# ── Chat history ─────────────────────────────────────────────────────────────
+
+# ── Load agent based on current provider/model selection ─────────────────────
+agent_key = (selected_provider, model_name, ollama_url)
+if st.session_state.get("agent_key") != agent_key:
+    st.session_state.messages = []
+    st.session_state.agent_key = agent_key
+
+agent = get_agent(selected_provider, model_name, ollama_url)
+
+# ── Chat history ──────────────────────────────────────────────────────────────
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])

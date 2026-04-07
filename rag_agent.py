@@ -3,12 +3,13 @@ LangChain RAG Agent with tool-use and conversational memory.
 
 The agent uses:
 - ChromaDB as the vector store (retriever tool)
-- OpenAI GPT as the LLM
+- OpenAI GPT or Llama (via Ollama) as the LLM
 - LangChain AgentExecutor with tool-calling
 - ConversationBufferWindowMemory for multi-turn context
 """
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain.tools.retriever import create_retriever_tool
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -25,9 +26,39 @@ Always cite the source document when possible.
 """
 
 
-def build_agent() -> AgentExecutor:
-    """Build and return the RAG agent executor."""
-    embeddings = OpenAIEmbeddings(openai_api_key=config.OPENAI_API_KEY)
+def build_agent(
+    provider: str = "openai",
+    model: str | None = None,
+    ollama_base_url: str | None = None,
+) -> AgentExecutor:
+    """
+    Build and return the RAG agent executor.
+
+    Args:
+        provider: "openai" or "ollama"
+        model: model name override (defaults to config values)
+        ollama_base_url: Ollama server URL (defaults to config.OLLAMA_BASE_URL)
+    """
+    if provider == "ollama":
+        llm_model = model or config.OLLAMA_MODEL
+        base_url = ollama_base_url or config.OLLAMA_BASE_URL
+        embeddings = OllamaEmbeddings(
+            model=config.OLLAMA_EMBED_MODEL,
+            base_url=base_url,
+        )
+        llm = ChatOllama(
+            model=llm_model,
+            base_url=base_url,
+            temperature=0,
+        )
+    else:
+        llm_model = model or config.OPENAI_MODEL
+        embeddings = OpenAIEmbeddings(openai_api_key=config.OPENAI_API_KEY)
+        llm = ChatOpenAI(
+            model=llm_model,
+            temperature=0,
+            openai_api_key=config.OPENAI_API_KEY,
+        )
 
     vector_store = Chroma(
         collection_name=config.COLLECTION_NAME,
@@ -50,12 +81,6 @@ def build_agent() -> AgentExecutor:
     )
 
     tools = [retriever_tool]
-
-    llm = ChatOpenAI(
-        model=config.OPENAI_MODEL,
-        temperature=0,
-        openai_api_key=config.OPENAI_API_KEY,
-    )
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -112,8 +137,15 @@ def _extract_sources(intermediate_steps: list) -> list[dict]:
 class RAGAgent:
     """Wrapper around AgentExecutor for easy use."""
 
-    def __init__(self):
-        self.executor = build_agent()
+    def __init__(
+        self,
+        provider: str = "openai",
+        model: str | None = None,
+        ollama_base_url: str | None = None,
+    ):
+        self.provider = provider
+        self.model = model
+        self.executor = build_agent(provider, model, ollama_base_url)
 
     def chat(self, query: str) -> str:
         result = self.executor.invoke({"input": query})
