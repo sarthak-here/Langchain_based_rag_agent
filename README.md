@@ -1,5 +1,10 @@
 # 🔍 LangChain RAG Agent
 
+> **[System Design](./systemdesign.md)** - Architecture, data flow, and how it works end-to-end
+
+---
+
+
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white"/>
   <img src="https://img.shields.io/badge/LangChain-0.3-green?style=for-the-badge&logo=chainlink&logoColor=white"/>
