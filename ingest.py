@@ -17,6 +17,7 @@ from langchain_community.document_loaders import (
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 
 import config
@@ -77,8 +78,17 @@ def reset_vector_store():
         print(f"Cleared existing vector store at: {config.CHROMA_PERSIST_DIR}")
 
 
-def build_vector_store(chunks: list) -> Chroma:
-    embeddings = OpenAIEmbeddings(openai_api_key=config.OPENAI_API_KEY)
+def build_vector_store(chunks: list, provider: str = "openai") -> Chroma:
+    if provider == "ollama":
+        embeddings = OllamaEmbeddings(
+            model=config.OLLAMA_EMBED_MODEL,
+            base_url=config.OLLAMA_BASE_URL,
+        )
+        print(f"Using Ollama embeddings ({config.OLLAMA_EMBED_MODEL})")
+    else:
+        embeddings = OpenAIEmbeddings(openai_api_key=config.OPENAI_API_KEY)
+        print("Using OpenAI embeddings")
+
     vector_store = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
@@ -89,7 +99,7 @@ def build_vector_store(chunks: list) -> Chroma:
     return vector_store
 
 
-def ingest(source: str, reset: bool = False):
+def ingest(source: str, reset: bool = False, provider: str = "openai"):
     if reset:
         reset_vector_store()
     docs = load_documents(source)
@@ -97,7 +107,7 @@ def ingest(source: str, reset: bool = False):
         print("No documents found. Exiting.")
         return
     chunks = split_documents(docs)
-    build_vector_store(chunks)
+    build_vector_store(chunks, provider=provider)
     print("Ingestion complete.")
 
 
@@ -112,5 +122,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Clear the existing vector store before ingesting.",
     )
+    parser.add_argument(
+        "--provider", "-p",
+        choices=["openai", "ollama"],
+        default="openai",
+        help="Embedding provider: 'openai' (default) or 'ollama' for offline Llama models.",
+    )
     args = parser.parse_args()
-    ingest(args.source, reset=args.reset)
+    ingest(args.source, reset=args.reset, provider=args.provider)

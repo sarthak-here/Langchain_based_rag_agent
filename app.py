@@ -83,12 +83,12 @@ with st.sidebar:
                     dest = os.path.join(tmp_dir, f.name)
                     with open(dest, "wb") as out:
                         out.write(f.read())
-                ingest(tmp_dir, reset=reset_on_ingest)
+                ingest(tmp_dir, reset=reset_on_ingest, provider=selected_provider)
         st.success(f"Ingested {len(uploaded_files)} file(s).")
 
     st.markdown("---")
     st.markdown("**CLI ingestion:**")
-    st.code("python ingest.py <path_or_url> [--reset]", language="bash")
+    st.code("python ingest.py <path_or_url> [--reset] [--provider ollama]", language="bash")
 
 
 # ── Load agent based on current provider/model selection ─────────────────────

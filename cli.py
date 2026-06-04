@@ -1,8 +1,10 @@
 """
 Interactive CLI for the RAG agent.
 Run: python cli.py
+Run with Llama: python cli.py --provider ollama
 """
 
+import argparse
 from rag_agent import RAGAgent
 
 HELP_TEXT = """
@@ -16,12 +18,27 @@ Commands:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="LangChain RAG Agent CLI")
+    parser.add_argument(
+        "--provider", "-p",
+        choices=["openai", "ollama"],
+        default="openai",
+        help="LLM provider: 'openai' (default) or 'ollama' for offline Llama models.",
+    )
+    parser.add_argument(
+        "--model", "-m",
+        default=None,
+        help="Model name override (e.g. llama3.2, llama3.1:8b).",
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("  LangChain RAG Agent — CLI")
+    print(f"  Provider: {args.provider}" + (f"  Model: {args.model}" if args.model else ""))
     print("  Type 'help' for available commands.")
     print("=" * 60)
 
-    agent = RAGAgent()
+    agent = RAGAgent(provider=args.provider, model=args.model)
     show_sources = False
 
     while True:
